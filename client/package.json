@@ -10,10 +10,19 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@radix-ui/react-hover-card": "^1.1.14",
     "@tailwindcss/vite": "^4.1.10",
+    "axios": "^1.10.0",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.18.1",
     "html5-qrcode": "^2.3.8",
+    "lucide-react": "^0.515.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.2",
+    "react-toastify": "^11.0.5",
+    "styled-components": "^6.1.19",
+    "tailwind-merge": "^3.3.1",
     "tailwindcss": "^4.1.10"
   },
   "devDependencies": {
