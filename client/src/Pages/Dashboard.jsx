@@ -350,7 +350,7 @@ const Dashboard = () => {
         </div>
 
         {/* Main Content */}
-        <div className="lg:ml-64 lg:ml-72">
+        <div className="lg:ml-64 ml-72">
           {/* Top Bar */}
           <header
             className={`sticky top-0 z-30 ${
