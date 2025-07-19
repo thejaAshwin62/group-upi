@@ -216,3 +216,68 @@ export const getCurrentUser = async (req, res) => {
     throw error;
   }
 };
+
+export const updateUser = async (req, res) => {
+  try {
+    const { name, email, phone } = req.body;
+    const userId = req.user.userId;
+
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    // Check if any field is provided to update
+    const updates = {};
+    if (name) updates.name = name;
+    if (email && email !== user.email) {
+      // Only check for duplicate email if it's being changed
+      const existingUser = await User.findOne({ email });
+      if (existingUser && existingUser._id.toString() !== userId) {
+        throw new BadRequestError("Email already in use");
+      }
+      updates.email = email;
+    }
+    if (phone) updates.phone = phone;
+
+    // Check if there are any updates to make
+    if (Object.keys(updates).length === 0) {
+      throw new BadRequestError("Please provide at least one field to update");
+    }
+
+    // Update the user with only the provided fields
+    Object.assign(user, updates);
+    await user.save();
+
+    // Return updated user without password
+    res.status(StatusCodes.OK).json({
+      msg: "User updated successfully",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      res.status(StatusCodes.BAD_REQUEST).json({
+        msg: "Email already exists",
+      });
+    } else {
+      throw error;
+    }
+  }
+};
+
+export const logout = async (req, res) => {
+  res.cookie("token", "logout", {
+    httpOnly: true,
+    expires: new Date(Date.now()),
+  });
+
+  res.status(StatusCodes.OK).json({ msg: "User logged out!" });
+};

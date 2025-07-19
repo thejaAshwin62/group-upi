@@ -31,6 +31,7 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/payments", paymentsRoutes);
 app.use("/api/v1/groups", groupsRoutes);
 
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 app.use(express.static(path.resolve(__dirname, "./public")));
@@ -39,6 +40,9 @@ app.use(express.static(path.resolve(__dirname, "./public")));
 app.get("/", (req, res) => {
   res.sendFile(path.resolve(__dirname, "./public", "index.html"));
 });
+app.get("/test",(req,res)=>{
+res.json("hello world ");
+})
 
 // Start Server and Connect to DB
 app.listen(PORT, async () => {

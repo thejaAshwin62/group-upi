@@ -234,3 +234,74 @@ export const removeMember = async (req, res) => {
     throw err;
   }
 };
+
+export const deleteGroup = async (req, res) => {
+  const { groupId } = req.params;
+
+  try {
+    const group = await Group.findById(groupId);
+
+    if (!group) {
+      throw new NotFoundError("Group not found");
+    }
+
+    // Verify user has permission
+    if (
+      group.owner.toString() !== req.user.userId.toString() &&
+      req.user.role !== "admin"
+    ) {
+      throw new UnauthorizedError("Not authorized to delete this group");
+    }
+
+    await Group.findByIdAndDelete(groupId);
+
+    res.json({ message: "Group deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting group:", err);
+    throw err;
+  }
+};
+
+export const leaveGroup = async (req, res) => {
+  const { groupId } = req.params;
+
+  try {
+    const group = await Group.findById(groupId);
+
+    if (!group) {
+      throw new NotFoundError("Group not found");
+    }
+
+    // Check if user is actually a member of the group
+    const isMember = group.members.some(
+      (member) => member.user.toString() === req.user.userId.toString()
+    );
+
+    if (!isMember) {
+      throw new BadRequestError("You are not a member of this group");
+    }
+
+    // Don't allow the owner to leave their own group
+    if (group.owner.toString() === req.user.userId.toString()) {
+      throw new BadRequestError(
+        "Group owner cannot leave the group. Please delete the group or transfer ownership instead."
+      );
+    }
+
+    // Remove the member from the group
+    group.members = group.members.filter(
+      (member) => member.user.toString() !== req.user.userId.toString()
+    );
+
+    await group.save();
+
+    // Populate user details in response
+    await group.populate("members.user", "name email");
+    await group.populate("owner", "name email");
+
+    res.json({ message: "Successfully left the group", group });
+  } catch (err) {
+    console.error("Error leaving group:", err);
+    throw err;
+  }
+};

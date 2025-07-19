@@ -6,11 +6,15 @@ import LoginPage from "./Pages/loginPage";
 import RegisterPage from "./Pages/RegisterPage";
 import Dashboard from "./Pages/Dashboard";
 import CreateGroup from "./Pages/CreateGroup";
+import ViewGroup from "./Pages/ViewGroup";
+import UpdateGroup from "./Pages/UpdateGroup";
+import ProfileSetting from "./Pages/ProfileSetting";
+
 const App = () => {
   const router = createBrowserRouter([
     {
       path: "/",
-      element: <Home />,
+      element: <Dashboard />,
     },
     {
       path: "/login",
@@ -25,8 +29,20 @@ const App = () => {
       element: <Dashboard />,
     },
     {
+      path: "/dashboard/view-groups/:groupId",
+      element: <ViewGroup />,
+    },
+    {
       path: "/dashboard/create-group",
       element: <CreateGroup />,
+    },
+    {
+      path: "/dashboard/update-group/:groupId",
+      element: <UpdateGroup />,
+    },
+    {
+      path: "/dashboard/profile",
+      element: <ProfileSetting />,
     },
   ]);
 

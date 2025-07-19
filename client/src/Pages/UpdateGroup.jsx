@@ -1,56 +1,79 @@
 "use client";
 
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import customFetch from "../utils/customFetch";
 import { toast } from "react-toastify";
 
-const CreateGroup = () => {
+const UpdateGroup = () => {
   const navigate = useNavigate();
+  const { groupId } = useParams();
   const [groupName, setGroupName] = useState("");
+  const [amount, setAmount] = useState("");
   const [userIdInput, setUserIdInput] = useState("");
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // Validation
+  useEffect(() => {
+    const fetchGroupDetails = async () => {
+      try {
+        const response = await customFetch.get(`/groups/${groupId}`);
+        const group = response.data.group;
+        setGroupName(group.name);
+        setAmount(group.amount);
+        setSelectedMembers(
+          group.members.map((member) => ({
+            id: member.userId,
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching group details:", error);
+        toast.error("Failed to fetch group details");
+      }
+    };
+    fetchGroupDetails();
+  }, [groupId]);
+
   const validateForm = () => {
     const newErrors = {};
     if (!groupName.trim()) {
       newErrors.groupName = "Group name is required";
     }
-    if (selectedMembers.length < 2) {
-      newErrors.members = "At least 2 members are required to create a group";
+    // Only validate amount if it's being changed (not empty)
+    if (amount !== "" && amount < 0) {
+      newErrors.amount = "Amount cannot be negative";
+    }
+    // Only validate members if new ones are being added
+    if (userIdInput.trim()) {
+      if (selectedMembers.length < 2) {
+        newErrors.members = "At least 2 members are required";
+      }
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Add member by ID
   const addMember = (userId) => {
     if (!userId.trim()) return;
-    // Check if member already exists
     if (selectedMembers.some((member) => member.id === userId)) {
       toast.error("Member already added");
       return;
     }
     setSelectedMembers([...selectedMembers, { id: userId }]);
     setUserIdInput("");
-    // Clear member error if it exists
     if (errors.members) {
       setErrors({ ...errors, members: "" });
     }
   };
 
-  // Remove member from selection
   const removeMember = (userId) => {
     setSelectedMembers(
       selectedMembers.filter((member) => member.id !== userId)
     );
   };
 
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) {
@@ -58,37 +81,37 @@ const CreateGroup = () => {
     }
     setIsLoading(true);
     try {
+      // Only include fields that have been modified
       const payload = {
-        groupName: groupName.trim(),
-        memberIds: selectedMembers.map((member) => member.id),
+        name: groupName.trim(),
       };
-      const response = await customFetch.post("/groups/create-group", payload);
-      if (response.data) {
-        setShowSuccess(true);
-        toast.success("Group created successfully!");
-        // Reset form and redirect after success
-        setTimeout(() => {
-          setGroupName("");
-          setSelectedMembers([]);
-          setShowSuccess(false);
-          setErrors({});
-          // Redirect to the newly created group
-          navigate(`/dashboard/view-groups/${response.data.group._id}`);
-        }, 2000);
+      // Only include amount if it's been modified
+      if (amount !== "") {
+        payload.amount = Number(amount);
       }
+      // Only include members if they've been modified
+      if (userIdInput.trim() || selectedMembers.length > 0) {
+        payload.memberIds = selectedMembers.map((member) => member.id);
+      }
+      await customFetch.patch(`/groups/${groupId}`, payload);
+      setShowSuccess(true);
+      toast.success("Group updated successfully!");
+      setTimeout(() => {
+        navigate(`/dashboard/view-groups/${groupId}`);
+      }, 2000);
     } catch (error) {
-      console.error("Error creating group:", error);
+      console.error("Error updating group:", error);
       const errorMessage =
         error.response?.data?.msg ||
-        "Failed to create group. Please try again.";
+        "Failed to update group. Please try again.";
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Check if form is valid
-  const isFormValid = groupName.trim() && selectedMembers.length >= 2;
+  // Form is valid if at least the name is provided and valid
+  const isFormValid = groupName.trim();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -116,11 +139,9 @@ const CreateGroup = () => {
             </button>
             <div>
               <h1 className="text-lg font-semibold text-gray-900">
-                Create Group
+                Update Group
               </h1>
-              <p className="text-xs text-gray-500">
-                Split expenses with friends
-              </p>
+              <p className="text-xs text-gray-500">Modify group details</p>
             </div>
           </div>
         </div>
@@ -142,15 +163,15 @@ const CreateGroup = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
                 />
               </svg>
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">
-              Create New Group
+              Update Group
             </h2>
             <p className="text-sm text-gray-600">
-              Start splitting expenses with friends
+              Modify group details (only name required)
             </p>
           </div>
 
@@ -158,11 +179,11 @@ const CreateGroup = () => {
           {showSuccess && (
             <div className="absolute inset-0 bg-white/95 backdrop-blur-xl rounded-xl flex items-center justify-center z-10">
               <div className="text-center p-4">
-                <div className="text-6xl mb-4 animate-bounce">🎉</div>
+                <div className="text-6xl mb-4 animate-bounce">✅</div>
                 <h3 className="text-2xl font-bold text-green-600 mb-2">
-                  Group Created Successfully!
+                  Group Updated Successfully!
                 </h3>
-                <p className="text-gray-600">Redirecting you to the group...</p>
+                <p className="text-gray-600">Redirecting to group details...</p>
               </div>
             </div>
           )}
@@ -171,15 +192,11 @@ const CreateGroup = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Group Name Field */}
             <div>
-              <label
-                htmlFor="groupName"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Group Name
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Group Name <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
-                id="groupName"
                 value={groupName}
                 onChange={(e) => {
                   setGroupName(e.target.value);
@@ -187,7 +204,7 @@ const CreateGroup = () => {
                     setErrors({ ...errors, groupName: "" });
                   }
                 }}
-                placeholder="e.g., Goa Trip, Birthday Dinner..."
+                placeholder="Enter group name"
                 className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all placeholder-gray-400 text-gray-900 ${
                   errors.groupName
                     ? "border-red-300 focus:ring-red-500 focus:border-red-500"
@@ -212,20 +229,54 @@ const CreateGroup = () => {
               )}
             </div>
 
-            {/* Members Selection */}
+            {/* Amount Field (Optional) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Total Amount <span className="text-blue-500">(optional)</span>
+              </label>
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => {
+                  setAmount(e.target.value);
+                  if (errors.amount) {
+                    setErrors({ ...errors, amount: "" });
+                  }
+                }}
+                placeholder="Leave empty to keep current amount"
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all placeholder-gray-400 text-gray-900 ${
+                  errors.amount
+                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                    : "border-gray-300"
+                }`}
+              />
+              {errors.amount && (
+                <p className="text-red-500 text-sm mt-2 flex items-center">
+                  <svg
+                    className="w-4 h-4 mr-1"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {errors.amount}
+                </p>
+              )}
+            </div>
+
+            {/* Members Selection (Optional) */}
             <div>
               <div className="flex justify-between items-center mb-3">
                 <label className="block text-sm font-medium text-gray-700">
-                  Add Members
+                  Group Members{" "}
+                  <span className="text-blue-500">(optional)</span>
                 </label>
-                <span
-                  className={`text-sm ${
-                    selectedMembers.length < 2
-                      ? "text-red-500"
-                      : "text-green-600"
-                  }`}
-                >
-                  {selectedMembers.length}/2 minimum
+                <span className="text-sm text-blue-600">
+                  {selectedMembers.length} members selected
                 </span>
               </div>
 
@@ -233,7 +284,7 @@ const CreateGroup = () => {
               {selectedMembers.length > 0 && (
                 <div className="mb-4 bg-gray-50 rounded-lg p-4 border border-gray-200">
                   <div className="text-sm font-medium text-gray-700 mb-3">
-                    Selected Members:
+                    Current Members:
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {selectedMembers.map((member) => (
@@ -267,7 +318,7 @@ const CreateGroup = () => {
                       addMember(userIdInput);
                     }
                   }}
-                  placeholder="Enter user ID and press Enter..."
+                  placeholder="Enter user ID to add..."
                   className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all placeholder-gray-400 text-gray-900 ${
                     errors.members
                       ? "border-red-300 focus:ring-red-500 focus:border-red-500"
@@ -293,7 +344,7 @@ const CreateGroup = () => {
               )}
             </div>
 
-            {/* Create Group Button */}
+            {/* Update Button */}
             <button
               type="submit"
               disabled={!isFormValid || isLoading}
@@ -306,7 +357,7 @@ const CreateGroup = () => {
               {isLoading ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Creating...</span>
+                  <span>Updating Group...</span>
                 </>
               ) : (
                 <>
@@ -320,45 +371,17 @@ const CreateGroup = () => {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                      d="M5 13l4 4L19 7"
                     />
                   </svg>
-                  <span>Create Group</span>
+                  <span>Update Group</span>
                 </>
               )}
             </button>
-
-            {/* Progress Indicator */}
-            <div className="mt-4">
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full transition-all duration-500 ${
-                    selectedMembers.length >= 2
-                      ? "bg-gradient-to-r from-green-400 to-green-600"
-                      : "bg-gradient-to-r from-orange-400 to-orange-600"
-                  }`}
-                  style={{
-                    width: `${Math.min(
-                      (selectedMembers.length / 2) * 100,
-                      100
-                    )}%`,
-                  }}
-                ></div>
-              </div>
-              <p className="text-sm text-gray-600 text-center mt-2">
-                {selectedMembers.length} member
-                {selectedMembers.length !== 1 ? "s" : ""} selected
-                {selectedMembers.length < 2 && (
-                  <span className="text-red-500 ml-1">
-                    (add {2 - selectedMembers.length} more)
-                  </span>
-                )}
-              </p>
-            </div>
           </form>
         </div>
 
-        {/* Help Card */}
+        {/* Info Card */}
         <div className="bg-blue-50 rounded-xl border border-blue-200 p-4 mt-4 max-w-md mx-auto">
           <div className="flex items-start space-x-3">
             <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
@@ -378,13 +401,13 @@ const CreateGroup = () => {
             </div>
             <div>
               <h3 className="font-medium text-blue-900 mb-1">
-                Tips for Creating Groups
+                Update Guidelines
               </h3>
               <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Use descriptive names for easy identification</li>
-                <li>• Add at least 2 members to start splitting expenses</li>
-                <li>• You can add more members later if needed</li>
-                <li>• All members will receive notifications about payments</li>
+                <li>• Only group name is required to update</li>
+                <li>• Leave amount empty to keep current value</li>
+                <li>• Add new members or remove existing ones</li>
+                <li>• Changes will be reflected immediately</li>
               </ul>
             </div>
           </div>
@@ -394,4 +417,4 @@ const CreateGroup = () => {
   );
 };
 
-export default CreateGroup;
+export default UpdateGroup;

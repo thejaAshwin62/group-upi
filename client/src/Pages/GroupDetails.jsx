@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BackgroundGradient } from "../components/background-gradient";
 import {
   HoverCard,
@@ -9,101 +9,151 @@ import {
 } from "../components/hover-card";
 import { SparklesCore } from "../components/sparkles";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate, useParams } from "react-router-dom";
+import customFetch from "../utils/customFetch";
+import { toast } from "react-toastify";
+
+const DeleteMemberModal = ({ isOpen, onClose, onConfirm, memberName }) => {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ type: "spring", duration: 0.3 }}
+            className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-6">
+              <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl text-red-600 dark:text-red-500">
+                  🗑️
+                </span>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white text-center mb-2">
+                Remove Member
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300 text-center">
+                Are you sure you want to remove{" "}
+                <span className="font-semibold">{memberName}</span> from the
+                group?
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onClose}
+                className="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                Cancel
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onConfirm}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl font-medium shadow-lg shadow-red-500/25"
+              >
+                Remove
+              </motion.button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
 
 const GroupDetails = () => {
+  const navigate = useNavigate();
+  const { groupId } = useParams();
   const [activeTab, setActiveTab] = useState("overview");
   const [isEditing, setIsEditing] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
+  const [groupData, setGroupData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [deleteMemberModal, setDeleteMemberModal] = useState({
+    isOpen: false,
+    memberId: null,
+    memberName: "",
+  });
 
-  // Mock group data
-  const groupData = {
-    id: 1,
-    name: "Weekend Trip to Goa",
-    amount: 15000,
-    createdAt: "2024-01-15",
-    description: "Beach resort stay with friends for 3 days",
-    category: "travel",
-    members: [
-      {
-        id: 1,
-        name: "John Doe",
-        upiId: "john@paytm",
-        status: "paid",
-        amount: 1875,
-        avatar: "JD",
-        lastSeen: "2 hours ago",
-      },
-      {
-        id: 2,
-        name: "Jane Smith",
-        upiId: "jane@gpay",
-        status: "paid",
-        amount: 1875,
-        avatar: "JS",
-        lastSeen: "1 hour ago",
-      },
-      {
-        id: 3,
-        name: "Mike Johnson",
-        upiId: "mike@phonepe",
-        status: "pending",
-        amount: 1875,
-        avatar: "MJ",
-        lastSeen: "5 hours ago",
-      },
-      {
-        id: 4,
-        name: "Sarah Wilson",
-        upiId: "sarah@paytm",
-        status: "paid",
-        amount: 1875,
-        avatar: "SW",
-        lastSeen: "30 minutes ago",
-      },
-      {
-        id: 5,
-        name: "Tom Brown",
-        upiId: "tom@gpay",
-        status: "pending",
-        amount: 1875,
-        avatar: "TB",
-        lastSeen: "3 hours ago",
-      },
-      {
-        id: 6,
-        name: "Lisa Davis",
-        upiId: "lisa@phonepe",
-        status: "paid",
-        amount: 1875,
-        avatar: "LD",
-        lastSeen: "1 day ago",
-      },
-      {
-        id: 7,
-        name: "Alex Chen",
-        upiId: "alex@paytm",
-        status: "pending",
-        amount: 1875,
-        avatar: "AC",
-        lastSeen: "6 hours ago",
-      },
-      {
-        id: 8,
-        name: "Emma Taylor",
-        upiId: "emma@gpay",
-        status: "paid",
-        amount: 1875,
-        avatar: "ET",
-        lastSeen: "4 hours ago",
-      },
-    ],
+  useEffect(() => {
+    fetchGroupData();
+  }, [groupId]);
+
+  const fetchGroupData = async () => {
+    try {
+      const response = await customFetch.get(`/groups/${groupId}`);
+      setGroupData(response.data.group);
+    } catch (error) {
+      console.error("Error fetching group data:", error);
+      toast.error("Failed to fetch group data");
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  const handleRemoveMember = async (memberId, memberName) => {
+    setDeleteMemberModal({
+      isOpen: true,
+      memberId,
+      memberName,
+    });
+  };
+
+  const confirmRemoveMember = async () => {
+    try {
+      await customFetch.post(`/groups/${groupId}/remove-member`, {
+        groupId,
+        memberId: deleteMemberModal.memberId,
+      });
+
+      toast.success("Member removed successfully");
+
+      // Refresh group data
+      fetchGroupData();
+
+      // Close modals
+      setSelectedMember(null);
+      setDeleteMemberModal({
+        isOpen: false,
+        memberId: null,
+        memberName: "",
+      });
+    } catch (error) {
+      console.error("Error removing member:", error);
+      toast.error(error.response?.data?.msg || "Failed to remove member");
+      setDeleteMemberModal({
+        isOpen: false,
+        memberId: null,
+        memberName: "",
+      });
+    }
+  };
+
+  if (isLoading || !groupData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin text-4xl">🔄</div>
+      </div>
+    );
+  }
 
   const paidMembers = groupData.members.filter(
     (m) => m.status === "paid"
   ).length;
   const totalMembers = groupData.members.length;
-  const amountPerPerson = groupData.amount / totalMembers;
+  const amountPerPerson = groupData.totalAmount / totalMembers;
   const totalCollected = paidMembers * amountPerPerson;
 
   const tabs = [
@@ -169,6 +219,10 @@ const GroupDetails = () => {
     },
   };
 
+  const handleEdit = () => {
+    navigate(`/dashboard/update-group/${groupData.id}`);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 relative overflow-hidden">
       {/* Background Elements */}
@@ -223,7 +277,7 @@ const GroupDetails = () => {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setIsEditing(!isEditing)}
+                onClick={handleEdit}
                 className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all duration-300 font-medium shadow-lg"
               >
                 ✏️ Edit
@@ -582,10 +636,45 @@ const GroupDetails = () => {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.1 }}
                         whileHover={{ y: -5 }}
-                        className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 cursor-pointer"
-                        onClick={() => setSelectedMember(member)}
+                        className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 relative group"
                       >
-                        <div className="flex items-center gap-4 mb-4">
+                        {/* Delete and Options Buttons - Now always visible with hover effect */}
+                        <div className="absolute right-4 top-4 flex gap-2 transition-all duration-300">
+                          <motion.button
+                            whileHover={{ scale: 1.1, backgroundColor: "#FEE2E2" }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => handleRemoveMember(member.userId, member.name)}
+                            className="p-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors shadow-sm hover:shadow-md"
+                            title="Remove member"
+                          >
+                            🗑️
+                          </motion.button>
+                          <HoverCard>
+                            <HoverCardTrigger>
+                              <button className="p-2.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl transition-colors shadow-sm hover:shadow-md">
+                                ⋮
+                              </button>
+                            </HoverCardTrigger>
+                            <HoverCardContent>
+                              <div className="space-y-2 min-w-[120px]">
+                                <button className="block w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm">
+                                  Edit Member
+                                </button>
+                                <button className="block w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm">
+                                  Send Reminder
+                                </button>
+                                <button
+                                  onClick={() => handleRemoveMember(member.userId, member.name)}
+                                  className="block w-full text-left px-3 py-2 hover:bg-red-50 rounded text-red-600 text-sm"
+                                >
+                                  Remove Member
+                                </button>
+                              </div>
+                            </HoverCardContent>
+                          </HoverCard>
+                        </div>
+
+                        <div className="flex items-center gap-4">
                           <div
                             className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${
                               member.status === "paid"
@@ -595,7 +684,7 @@ const GroupDetails = () => {
                           >
                             {member.avatar}
                           </div>
-                          <div className="flex-1">
+                          <div>
                             <h4 className="font-semibold text-gray-900">
                               {member.name}
                             </h4>
@@ -603,29 +692,9 @@ const GroupDetails = () => {
                               {member.upiId}
                             </p>
                           </div>
-                          <HoverCard>
-                            <HoverCardTrigger>
-                              <button className="text-gray-400 hover:text-gray-600 p-2">
-                                ⋮
-                              </button>
-                            </HoverCardTrigger>
-                            <HoverCardContent>
-                              <div className="space-y-2">
-                                <button className="block w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm">
-                                  Edit Member
-                                </button>
-                                <button className="block w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm">
-                                  Send Reminder
-                                </button>
-                                <button className="block w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-red-600 text-sm">
-                                  Remove Member
-                                </button>
-                              </div>
-                            </HoverCardContent>
-                          </HoverCard>
                         </div>
 
-                        <div className="space-y-3">
+                        <div className="mt-4 space-y-3">
                           <div className="flex justify-between items-center">
                             <span className="text-xl font-bold text-gray-900">
                               ₹{member.amount}
@@ -917,6 +986,20 @@ const GroupDetails = () => {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Delete Member Confirmation Modal */}
+        <DeleteMemberModal
+          isOpen={deleteMemberModal.isOpen}
+          onClose={() =>
+            setDeleteMemberModal({
+              isOpen: false,
+              memberId: null,
+              memberName: "",
+            })
+          }
+          onConfirm={confirmRemoveMember}
+          memberName={deleteMemberModal.memberName}
+        />
       </div>
 
       <style jsx>{`

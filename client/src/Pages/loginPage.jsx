@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { LogIn, Mail, Lock, Eye, EyeOff } from "lucide-react";
-import useFetch from "../utils/customFetch";
+import customFetch from "../utils/customFetch";
 import { toast } from "react-toastify";
 import { TypewriterEffectDemo } from "../Components/CustomComponents";
 import Bg from "../assets/BG.jpg";
@@ -25,13 +25,13 @@ const LoginPage = () => {
       : `${formData.email}@gmail.com`;
 
     try {
-      const response = await useFetch.post("/auth/login", {
+      const response = await customFetch.post("/auth/login", {
         ...formData,
         email: AutoFillEmail,
       });
 
       toast.success(response.data.msg || "Login successful!");
-      navigate("/jwells");
+      navigate("/dashboard");
     } catch (error) {
       console.error("Login error:", error);
       const errorMessage = error?.response?.data?.msg || "Something went wrong";
