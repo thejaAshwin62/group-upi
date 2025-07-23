@@ -9,6 +9,8 @@ import CreateGroup from "./Pages/CreateGroup";
 import ViewGroup from "./Pages/ViewGroup";
 import UpdateGroup from "./Pages/UpdateGroup";
 import ProfileSetting from "./Pages/ProfileSetting";
+import ForgotPassword from "./Pages/ForgotPassword";
+import ResetPassword from "./Pages/ResetPassword";
 
 const App = () => {
   const router = createBrowserRouter([
@@ -23,6 +25,14 @@ const App = () => {
     {
       path: "/register",
       element: <RegisterPage />,
+    },
+    {
+      path: "/forgot-password",
+      element: <ForgotPassword />,
+    },
+    {
+      path: "/reset-password/:token",
+      element: <ResetPassword />,
     },
     {
       path: "/dashboard",

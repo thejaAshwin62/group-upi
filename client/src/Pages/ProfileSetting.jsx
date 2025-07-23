@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 import customFetch from "../utils/customFetch";
 import EditProfile from "../Components/EditProfile";
 import { handleLogout } from "../utils/logoutUtils";
+import { motion, AnimatePresence } from "framer-motion";
 
 const ProfileSetting = () => {
   const navigate = useNavigate();
@@ -18,6 +19,12 @@ const ProfileSetting = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordError, setPasswordError] = useState("");
 
   useEffect(() => {
     fetchUserData();
@@ -109,12 +116,59 @@ const ProfileSetting = () => {
     toast.success("Profile updated successfully");
   };
 
+  const handlePasswordChange = (field, value) => {
+    setPasswordData((prev) => ({ ...prev, [field]: value }));
+    setPasswordError(""); // Clear any previous errors
+  };
+
+  const handleUpdatePassword = async () => {
+    // Validate passwords
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordError("New passwords do not match");
+      toast.error("New passwords do not match");
+      return;
+    }
+
+    if (
+      !passwordData.currentPassword ||
+      !passwordData.newPassword ||
+      !passwordData.confirmPassword
+    ) {
+      setPasswordError("All password fields are required");
+      toast.error("All password fields are required");
+      return;
+    }
+
+    try {
+      const response = await customFetch.post("/auth/update-password", {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      });
+
+      toast.success("Password updated successfully");
+      setShowChangePassword(false);
+      // Clear password fields
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.msg || "Failed to update password";
+      setPasswordError(errorMessage);
+      toast.error(errorMessage);
+    }
+  };
+
   if (isLoading || !userData) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-600 font-medium">Loading profile...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="flex flex-col items-center justify-center gap-3">
+          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-600 dark:text-gray-300 text-sm font-medium">
+            Loading your dashboard...
+          </p>
         </div>
       </div>
     );
@@ -474,6 +528,143 @@ const ProfileSetting = () => {
               </button>
             </div>
           )}
+
+          {/* Password Change Modal */}
+          <AnimatePresence>
+            {showChangePassword && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                onClick={() => setShowChangePassword(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden"
+                >
+                  {/* Modal Header */}
+                  <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                      <span className="text-xl mr-2">🔐</span>
+                      Change Password
+                    </h2>
+                    <button
+                      onClick={() => setShowChangePassword(false)}
+                      className="text-gray-400 hover:text-gray-500 transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Modal Body */}
+                  <div className="p-6">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Current Password
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="password"
+                            value={passwordData.currentPassword}
+                            onChange={(e) =>
+                              handlePasswordChange("currentPassword", e.target.value)
+                            }
+                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Enter your current password"
+                          />
+                          <span className="absolute left-3 top-3 text-gray-400">
+                            🔑
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          New Password
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="password"
+                            value={passwordData.newPassword}
+                            onChange={(e) =>
+                              handlePasswordChange("newPassword", e.target.value)
+                            }
+                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Enter new password"
+                          />
+                          <span className="absolute left-3 top-3 text-gray-400">
+                            🔒
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Confirm New Password
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="password"
+                            value={passwordData.confirmPassword}
+                            onChange={(e) =>
+                              handlePasswordChange("confirmPassword", e.target.value)
+                            }
+                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Confirm your new password"
+                          />
+                          <span className="absolute left-3 top-3 text-gray-400">
+                            🔒
+                          </span>
+                        </div>
+                      </div>
+
+                      {passwordError && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg p-3 flex items-center"
+                        >
+                          <span className="mr-2">⚠️</span>
+                          {passwordError}
+                        </motion.p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={handleUpdatePassword}
+                      className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center"
+                    >
+                      <span className="mr-2">💾</span>
+                      Update Password
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowChangePassword(false);
+                        setPasswordData({
+                          currentPassword: "",
+                          newPassword: "",
+                          confirmPassword: "",
+                        });
+                        setPasswordError("");
+                      }}
+                      className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center justify-center"
+                    >
+                      <span className="mr-2">✕</span>
+                      Cancel
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Account Actions */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">

@@ -110,6 +110,12 @@ const Dashboard = () => {
     fetchUserData();
   }, []);
 
+  // console.log("userData", userData);
+
+  if (!userData) {
+    navigate("/login");
+  }
+
   const handleSort = (groups) => {
     if (!groups) return [];
     return [...groups].sort((a, b) => {
@@ -350,7 +356,7 @@ const Dashboard = () => {
         </div>
 
         {/* Main Content */}
-        <div className="lg:ml-64 ml-72">
+        <div className="ml-64 lg:ml-72">
           {/* Top Bar */}
           <header
             className={`sticky top-0 z-30 ${

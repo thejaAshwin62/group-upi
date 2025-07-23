@@ -8,9 +8,10 @@ import { toast } from "react-toastify";
 const CreateGroup = () => {
   const navigate = useNavigate();
   const [groupName, setGroupName] = useState("");
-  const [userIdInput, setUserIdInput] = useState("");
+  const [usernameInput, setUsernameInput] = useState("");
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -27,26 +28,50 @@ const CreateGroup = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Add member by ID
-  const addMember = (userId) => {
-    if (!userId.trim()) return;
-    // Check if member already exists
-    if (selectedMembers.some((member) => member.id === userId)) {
+  // Validate and add member by username
+  const addMember = async (username) => {
+    if (!username.trim()) return;
+
+    // Check if member already exists in selection
+    if (selectedMembers.some((member) => member.username === username)) {
       toast.error("Member already added");
       return;
     }
-    setSelectedMembers([...selectedMembers, { id: userId }]);
-    setUserIdInput("");
-    // Clear member error if it exists
-    if (errors.members) {
-      setErrors({ ...errors, members: "" });
+
+    setIsValidating(true);
+    try {
+      const response = await customFetch.post("/auth/validate-username", {
+        username: username.trim(),
+      });
+
+      if (response.data.valid) {
+        setSelectedMembers([...selectedMembers, { username }]);
+        setUsernameInput("");
+        toast.success("Member added successfully!");
+        // Clear member error if it exists
+        if (errors.members) {
+          setErrors({ ...errors, members: "" });
+        }
+      }
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.msg ||
+        (error.response?.status === 404
+          ? "Username not found"
+          : "Failed to validate username");
+      toast.error(errorMessage);
+      console.log("Validation error:", errorMessage);
+      
+      setUsernameInput(""); // Clear the invalid input
+    } finally {
+      setIsValidating(false);
     }
   };
 
   // Remove member from selection
-  const removeMember = (userId) => {
+  const removeMember = (username) => {
     setSelectedMembers(
-      selectedMembers.filter((member) => member.id !== userId)
+      selectedMembers.filter((member) => member.username !== username)
     );
   };
 
@@ -60,7 +85,7 @@ const CreateGroup = () => {
     try {
       const payload = {
         groupName: groupName.trim(),
-        memberIds: selectedMembers.map((member) => member.id),
+        memberUsernames: selectedMembers.map((member) => member.username),
       };
       const response = await customFetch.post("/groups/create-group", payload);
       if (response.data) {
@@ -238,13 +263,15 @@ const CreateGroup = () => {
                   <div className="flex flex-wrap gap-2">
                     {selectedMembers.map((member) => (
                       <div
-                        key={member.id}
+                        key={member.username}
                         className="flex items-center bg-blue-100 text-blue-800 px-3 py-1.5 rounded-full text-sm font-medium border border-blue-200"
                       >
-                        <span className="truncate max-w-24">{member.id}</span>
+                        <span className="truncate max-w-24">
+                          {member.username}
+                        </span>
                         <button
                           type="button"
-                          onClick={() => removeMember(member.id)}
+                          onClick={() => removeMember(member.username)}
                           className="ml-2 text-blue-600 hover:text-blue-800 font-bold"
                         >
                           ×
@@ -255,25 +282,31 @@ const CreateGroup = () => {
                 </div>
               )}
 
-              {/* User ID Input */}
+              {/* Username Input */}
               <div className="relative">
                 <input
                   type="text"
-                  value={userIdInput}
-                  onChange={(e) => setUserIdInput(e.target.value)}
+                  value={usernameInput}
+                  onChange={(e) => setUsernameInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      addMember(userIdInput);
+                      addMember(usernameInput);
                     }
                   }}
-                  placeholder="Enter user ID and press Enter..."
+                  placeholder="Enter username and press Enter..."
                   className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all placeholder-gray-400 text-gray-900 ${
                     errors.members
                       ? "border-red-300 focus:ring-red-500 focus:border-red-500"
                       : "border-gray-300"
                   }`}
+                  disabled={isValidating}
                 />
+                {isValidating && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                )}
               </div>
               {errors.members && (
                 <p className="text-red-500 text-sm mt-2 flex items-center">

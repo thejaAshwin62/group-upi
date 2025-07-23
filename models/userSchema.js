@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 const User = new mongoose.Schema({
   name: {
     type: String,
+    unique: true,
     required: true,
   },
 
@@ -36,6 +37,10 @@ const User = new mongoose.Schema({
   failedLoginAttempts: { type: Number, default: 0 },
   lockoutUntil: { type: Date },
   lastLockoutDuration: { type: Number, default: 0 },
+
+  // For password reset functionality
+  passwordResetToken: String,
+  passwordResetExpires: Date,
 });
 
 export default mongoose.model("User", User);

@@ -4,6 +4,18 @@ import { hashPassword, comparePassword } from "../utils/passwordutils.js";
 import { createJWT } from "../utils/tokenUtils.js";
 import { BadRequestError, NotFoundError } from "../errors/customErrors.js";
 import Group from "../models/groupSchema.js";
+import { sendEmail } from "../utils/email.js";
+import crypto from "crypto";
+
+// Helper function to generate reset token
+const generateResetToken = () => {
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+  return { resetToken, hashedToken };
+};
 
 export const register = async (req, res, next) => {
   const { email, password, name } = req.body;
@@ -131,11 +143,11 @@ export const login = async (req, res) => {
     await user.save();
 
     const token = createJWT({ userId: user._id, role: user.role });
-    const oneDay = 1000 * 60 * 60 * 24;
+    const thirtyDays = 30000 * 60 * 60 * 24;
 
     res.cookie("token", token, {
       httpOnly: true,
-      expires: new Date(Date.now() + oneDay),
+      expires: new Date(Date.now() + thirtyDays),
       secure: process.env.NODE_ENV === "production", // only on HTTPS in prod
       sameSite: "strict", // helps protect against CSRF
     });
@@ -280,4 +292,158 @@ export const logout = async (req, res) => {
   });
 
   res.status(StatusCodes.OK).json({ msg: "User logged out!" });
+};
+
+export const validateUsername = async (req, res) => {
+  const { username } = req.body;
+
+  if (!username) {
+    throw new BadRequestError("Username is required");
+  }
+
+  try {
+    const user = await User.findOne({ name: username });
+
+    if (!user) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        valid: false,
+        msg: "Username not found",
+      });
+    }
+
+    // Don't send back sensitive user data, just confirm the username exists
+    res.status(StatusCodes.OK).json({
+      valid: true,
+      msg: "Username is valid",
+    });
+  } catch (error) {
+    console.error("Error validating username:", error);
+    throw error;
+  }
+};
+
+export const forgotPassword = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        msg: "User not found",
+      });
+    }
+
+    const { resetToken, hashedToken } = generateResetToken();
+    user.passwordResetToken = hashedToken;
+    user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    await user.save();
+
+    try {
+      const resetURL = `${
+        process.env.FRONTEND_URL || "http://localhost:5173"
+      }/reset-password/${resetToken}`;
+      const message = `Forgot your password? Reset it using this link: \n\n ${resetURL}\n\nThis link will expire in 10 minutes.`;
+
+      await sendEmail({
+        email: user.email,
+        subject: "Password Reset",
+        message,
+      });
+
+      res.status(StatusCodes.OK).json({
+        msg: "Reset link sent to your email",
+        // For testing purposes only, remove in production
+        resetToken: resetToken,
+      });
+    } catch (error) {
+      user.passwordResetToken = undefined;
+      user.passwordResetExpires = undefined;
+      await user.save();
+
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        msg: "Error sending reset email. Please try again later.",
+      });
+    }
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      msg: "Something went wrong, please try again",
+    });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(req.params.token)
+      .digest("hex");
+
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        msg: "Invalid or expired password reset token",
+      });
+    }
+
+    if (!req.body.newPassword) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        msg: "Please provide a new password",
+      });
+    }
+
+    // Explicitly hash the new password
+    user.password = await hashPassword(req.body.newPassword);
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+
+    await user.save();
+
+    res.status(StatusCodes.OK).json({ msg: "Password reset successfully" });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      msg: "Something went wrong, please try again",
+    });
+  }
+};
+
+export const updatePassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const userId = req.user.userId;
+
+  if (!currentPassword || !newPassword) {
+    throw new BadRequestError("Please provide both current and new password");
+  }
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    // Verify current password
+    const isPasswordValid = await comparePassword(
+      currentPassword,
+      user.password
+    );
+    if (!isPasswordValid) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        msg: "Current password is incorrect",
+      });
+    }
+
+    // Hash and update new password
+    user.password = await hashPassword(newPassword);
+    await user.save();
+
+    res.status(StatusCodes.OK).json({ msg: "Password updated successfully" });
+  } catch (error) {
+    console.error("Update password error:", error);
+    throw error;
+  }
 };

@@ -1,37 +1,40 @@
 "use client";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { LogIn, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Lock, Eye, EyeOff, ArrowLeft, CheckCircle } from "lucide-react";
 import customFetch from "../utils/customFetch";
 import { toast } from "react-toastify";
 import { TypewriterEffectDemo } from "../Components/CustomComponents";
 
-const LoginPage = () => {
+const ResetPassword = () => {
   const navigate = useNavigate();
+  const { token } = useParams();
   const [showPassword, setShowPassword] = useState(false);
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    newPassword: "",
+    confirmPassword: "",
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    const AutoFillEmail = formData.email.includes("@")
-      ? formData.email
-      : `${formData.email}@gmail.com`;
+    if (formData.newPassword !== formData.confirmPassword) {
+      toast.error("Passwords do not match");
+      setLoading(false);
+      return;
+    }
 
     try {
-      const response = await customFetch.post("/auth/login", {
-        ...formData,
-        email: AutoFillEmail,
+      const response = await customFetch.post(`/auth/reset-password/${token}`, {
+        newPassword: formData.newPassword,
       });
-      toast.success(response.data.msg || "Login successful!");
-      navigate("/dashboard");
+      toast.success(response.data.msg || "Password reset successful!");
+      navigate("/login");
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("Reset password error:", error);
       const errorMessage = error?.response?.data?.msg || "Something went wrong";
       toast.error(errorMessage);
     } finally {
@@ -42,6 +45,11 @@ const LoginPage = () => {
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
+  const passwordsMatch =
+    formData.newPassword &&
+    formData.confirmPassword &&
+    formData.newPassword === formData.confirmPassword;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 relative overflow-hidden">
@@ -64,7 +72,7 @@ const LoginPage = () => {
       </div>
 
       <div className="relative min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        {/* Main Login Card */}
+        {/* Main Card */}
         <motion.div
           initial={{ opacity: 0, y: 30, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -86,7 +94,7 @@ const LoginPage = () => {
                   transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
                   className="mx-auto w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-500/25"
                 >
-                  <LogIn className="w-8 h-8 text-white" />
+                  <Lock className="w-8 h-8 text-white" />
                 </motion.div>
 
                 <motion.div
@@ -97,16 +105,14 @@ const LoginPage = () => {
                   <h2 className="text-3xl font-bold text-gray-800 mb-2">
                     <TypewriterEffectDemo
                       words={[
-                        { text: "Welcome", className: "text-gray-800" },
-                        { text: "Back", className: "text-gray-800" },
-                        { text: "to", className: "text-gray-800" },
-                        { text: "UPI", className: "text-blue-600" },
-                        { text: "Groups", className: "text-blue-600" },
+                        { text: "Reset", className: "text-gray-800" },
+                        { text: "Your", className: "text-gray-800" },
+                        { text: "Password", className: "text-blue-600" },
                       ]}
                     />
                   </h2>
                   <p className="text-gray-600 text-sm">
-                    Sign in to manage your group payments
+                    Enter your new password below
                   </p>
                 </motion.div>
               </div>
@@ -119,51 +125,26 @@ const LoginPage = () => {
                 className="space-y-6"
                 onSubmit={handleSubmit}
               >
-                {/* Email Input */}
+                {/* New Password Input */}
                 <div className="space-y-2">
                   <label
-                    htmlFor="email"
+                    htmlFor="newPassword"
                     className="block text-sm font-semibold text-gray-700"
                   >
-                    Email Address
-                  </label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-blue-500 group-focus-within:text-blue-600 transition-colors" />
-                    </div>
-                    <input
-                      id="email"
-                      name="email"
-                      type="text"
-                      required
-                      className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-gray-800 placeholder-gray-400"
-                      placeholder="Enter your email"
-                      value={formData.email}
-                      onChange={handleChange}
-                    />
-                  </div>
-                </div>
-
-                {/* Password Input */}
-                <div className="space-y-2">
-                  <label
-                    htmlFor="password"
-                    className="block text-sm font-semibold text-gray-700"
-                  >
-                    Password
+                    New Password
                   </label>
                   <div className="relative group">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                       <Lock className="h-5 w-5 text-blue-500 group-focus-within:text-blue-600 transition-colors" />
                     </div>
                     <input
-                      id="password"
-                      name="password"
+                      id="newPassword"
+                      name="newPassword"
                       type={showPassword ? "text" : "password"}
                       required
                       className="w-full pl-12 pr-12 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-gray-800 placeholder-gray-400"
-                      placeholder="Enter your password"
-                      value={formData.password}
+                      placeholder="Enter new password"
+                      value={formData.newPassword}
                       onChange={handleChange}
                     />
                     <button
@@ -180,64 +161,129 @@ const LoginPage = () => {
                   </div>
                 </div>
 
-                {/* Remember Me & Forgot Password */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
+                {/* Confirm Password Input */}
+                <div className="space-y-2">
+                  <label
+                    htmlFor="confirmPassword"
+                    className="block text-sm font-semibold text-gray-700"
+                  >
+                    Confirm New Password
+                  </label>
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Lock className="h-5 w-5 text-blue-500 group-focus-within:text-blue-600 transition-colors" />
+                    </div>
                     <input
-                      id="remember_me"
-                      name="remember_me"
-                      type="checkbox"
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type={showConfirmPassword ? "text" : "password"}
+                      required
+                      className={`w-full pl-12 pr-12 py-3 bg-white border rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 text-gray-800 placeholder-gray-400 ${
+                        formData.confirmPassword && !passwordsMatch
+                          ? "border-red-300 focus:ring-red-500"
+                          : formData.confirmPassword && passwordsMatch
+                          ? "border-green-300 focus:ring-green-500"
+                          : "border-gray-200 focus:ring-blue-500"
+                      }`}
+                      placeholder="Confirm new password"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
                     />
-                    <label
-                      htmlFor="remember_me"
-                      className="ml-2 block text-sm text-gray-700"
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center"
+                      onClick={() =>
+                        setShowConfirmPassword(!showConfirmPassword)
+                      }
                     >
-                      Remember me
-                    </label>
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-5 w-5 text-blue-500 hover:text-blue-600 transition-colors" />
+                      ) : (
+                        <Eye className="h-5 w-5 text-blue-500 hover:text-blue-600 transition-colors" />
+                      )}
+                    </button>
+                    {formData.confirmPassword && passwordsMatch && (
+                      <div className="absolute inset-y-0 right-12 flex items-center">
+                        <CheckCircle className="h-5 w-5 text-green-500" />
+                      </div>
+                    )}
                   </div>
-                  <div className="text-sm">
-                    <Link
-                      to="/forgot-password"
-                      className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
-                    >
-                      Forgot password?
-                    </Link>
-                  </div>
+                  {formData.confirmPassword && !passwordsMatch && (
+                    <p className="text-red-500 text-xs mt-1">
+                      Passwords do not match
+                    </p>
+                  )}
                 </div>
+
+                {/* Password Strength Indicator */}
+                {formData.newPassword && (
+                  <div className="space-y-2">
+                    <div className="text-xs text-gray-600">
+                      Password strength:
+                    </div>
+                    <div className="flex space-x-1">
+                      <div
+                        className={`h-2 w-1/4 rounded ${
+                          formData.newPassword.length >= 6
+                            ? "bg-green-400"
+                            : "bg-gray-200"
+                        }`}
+                      ></div>
+                      <div
+                        className={`h-2 w-1/4 rounded ${
+                          formData.newPassword.length >= 8
+                            ? "bg-green-400"
+                            : "bg-gray-200"
+                        }`}
+                      ></div>
+                      <div
+                        className={`h-2 w-1/4 rounded ${
+                          /[A-Z]/.test(formData.newPassword)
+                            ? "bg-green-400"
+                            : "bg-gray-200"
+                        }`}
+                      ></div>
+                      <div
+                        className={`h-2 w-1/4 rounded ${
+                          /[0-9]/.test(formData.newPassword)
+                            ? "bg-green-400"
+                            : "bg-gray-200"
+                        }`}
+                      ></div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Submit Button */}
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !passwordsMatch}
                   className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                 >
                   {loading ? (
                     <>
                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Signing in...</span>
+                      <span>Resetting...</span>
                     </>
                   ) : (
                     <>
-                      <LogIn className="w-5 h-5" />
-                      <span>Sign In</span>
+                      <Lock className="w-5 h-5" />
+                      <span>Reset Password</span>
                     </>
                   )}
                 </motion.button>
 
-                {/* Register Link */}
+                {/* Back to Login */}
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">
-                    Don't have an account?{" "}
-                    <Link
-                      to="/register"
-                      className="font-semibold text-blue-600 hover:text-blue-500 transition-colors"
-                    >
-                      Create one now
-                    </Link>
-                  </p>
+                  <Link
+                    to="/login"
+                    className="inline-flex items-center space-x-2 text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back to login</span>
+                  </Link>
                 </div>
               </motion.form>
             </div>
@@ -253,4 +299,4 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage;
+export default ResetPassword;

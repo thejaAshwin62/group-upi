@@ -1,170 +1,37 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { toast } from "react-toastify";
 import customFetch from "../utils/customFetch";
-
-const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-};
 
 const ViewGroup = () => {
   const { groupId } = useParams();
-  const navigate = useNavigate();
   const [groupData, setGroupData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("members");
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentForm, setPaymentForm] = useState({
+  const [activeTab, setActiveTab] = useState("overview");
+  const [showToast, setShowToast] = useState(false);
+  const [showScanPayModal, setShowScanPayModal] = useState(false);
+  const [paymentDetails, setPaymentDetails] = useState({
     shopUpiId: "",
     totalAmount: "",
   });
-  const [paymentData, setPaymentData] = useState(null);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [isDeletingMember, setIsDeletingMember] = useState(false);
-  const [leaveGroupModal, setLeaveGroupModal] = useState(false);
-  const [isLeavingGroup, setIsLeavingGroup] = useState(false);
-  const [userData, setUserData] = useState(null);
-  const [deleteMemberModal, setDeleteMemberModal] = useState({
-    isOpen: false,
-    memberId: null,
-    memberName: "",
-  });
-  const [addMemberModal, setAddMemberModal] = useState(false);
-  const [isAddingMembers, setIsAddingMembers] = useState(false);
-
-  const fetchGroupDetails = async () => {
-    try {
-      const response = await customFetch.get(`/groups/${groupId}`);
-      setGroupData(response.data.group);
-    } catch (error) {
-      console.error("Error fetching group details:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchUserData = async () => {
-    try {
-      const response = await customFetch.get("/auth/current-user");
-      setUserData(response.data.user);
-    } catch (error) {
-      console.error("Error fetching user data:", error);
-      toast.error("Failed to fetch user data");
-    }
-  };
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
+    const fetchGroupDetails = async () => {
       try {
-        await Promise.all([fetchGroupDetails(), fetchUserData()]);
+        const response = await customFetch.get(`/groups/${groupId}`);
+        setGroupData(response.data.group);
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Error fetching group details:", error);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchData();
+
+    fetchGroupDetails();
   }, [groupId]);
-
-  const handlePaymentSubmit = async (e) => {
-    e.preventDefault();
-    setIsProcessingPayment(true);
-    try {
-      const response = await customFetch.post(
-        "/payments/process-shop-payment",
-        {
-          groupId,
-          shopUpiId: paymentForm.shopUpiId,
-          totalAmount: Number(paymentForm.totalAmount),
-        }
-      );
-      setPaymentData(response.data);
-      setShowPaymentModal(false);
-      setActiveTab("payments");
-      await fetchGroupDetails();
-    } catch (error) {
-      console.error("Error processing payment:", error);
-    } finally {
-      setIsProcessingPayment(false);
-    }
-  };
-
-  const handleUpiPayment = (upiLink) => {
-    window.location.href = upiLink;
-  };
-
-  const deleteMember = async (memberId, memberName) => {
-    setDeleteMemberModal({
-      isOpen: true,
-      memberId,
-      memberName,
-    });
-  };
-
-  const confirmDeleteMember = async () => {
-    setIsDeletingMember(true);
-    try {
-      await customFetch.delete("/groups", {
-        data: {
-          groupId,
-          memberId: deleteMemberModal.memberId,
-        },
-      });
-      await fetchGroupDetails();
-      toast.success("Member removed successfully");
-    } catch (error) {
-      console.error("Error deleting member:", error);
-      toast.error("Failed to delete member. Please try again.");
-    } finally {
-      setIsDeletingMember(false);
-      setDeleteMemberModal({
-        isOpen: false,
-        memberId: null,
-        memberName: "",
-      });
-    }
-  };
-
-  const handleAddMembers = async (memberIds) => {
-    if (!memberIds.length) return;
-    setIsAddingMembers(true);
-    try {
-      await customFetch.post(`/groups/${groupId}/members`, {
-        memberIds,
-      });
-      toast.success("Members added successfully");
-      await fetchGroupDetails();
-      setAddMemberModal(false);
-    } catch (error) {
-      console.error("Error adding members:", error);
-      toast.error(error.response?.data?.msg || "Failed to add members");
-    } finally {
-      setIsAddingMembers(false);
-    }
-  };
-
-  const handleLeaveGroup = async () => {
-    setIsLeavingGroup(true);
-    try {
-      await customFetch.post(`/groups/${groupId}/leave`);
-      toast.success("Successfully left the group");
-      navigate("/dashboard");
-    } catch (error) {
-      console.error("Error leaving group:", error);
-      toast.error(error.response?.data?.msg || "Failed to leave group");
-    } finally {
-      setIsLeavingGroup(false);
-      setLeaveGroupModal(false);
-    }
-  };
 
   const tabs = [
     { id: "overview", label: "Overview", icon: "📊" },
@@ -172,779 +39,519 @@ const ViewGroup = () => {
     { id: "payments", label: "Payments", icon: "💳" },
   ];
 
+  // Copy UPI link to clipboard
+  const copyUpiLink = async () => {
+    try {
+      await navigator.clipboard.writeText(groupData.upiLink);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+    }
+  };
+
+  // Format date
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
+  // Handle pay now action
+  const handlePayNow = (member) => {
+    const upiUrl = `upi://pay?pa=${member.upiId}&pn=${member.name}&am=${member.share}&cu=INR`;
+    window.open(upiUrl, "_blank");
+  };
+
+  // Send reminder (placeholder)
+  const sendReminder = (member) => {
+    console.log(`Sending reminder to ${member.name}`);
+  };
+
+  // Handle scan & pay submission
+  const handleScanPaySubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const response = await customFetch.post("/payments/scan-pay", {
+        groupId: groupData._id,
+        shopUpiId: paymentDetails.shopUpiId,
+        totalAmount: Number(paymentDetails.totalAmount),
+      });
+
+      if (response.data) {
+        setShowScanPayModal(false);
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
+      }
+    } catch (error) {
+      console.error("Payment error:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin text-4xl">🔄</div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center space-y-4">
+          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+          <p className="text-slate-600 font-medium">Loading group details...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Mobile Header */}
-      <div className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => navigate(-1)}
-              className="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-colors"
-            >
-              <svg
-                className="w-6 h-6 text-gray-600"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-            </button>
-            <div>
-              <h1 className="text-lg font-semibold text-gray-900 truncate max-w-[200px]">
-                {groupData?.name}
-              </h1>
-              <p className="text-xs text-gray-500">
-                {groupData?.memberCount} members
-              </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
+      {/* Subtle Background Pattern */}
+      <div className="absolute inset-0 opacity-[0.02]">
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fillRule='evenodd'%3E%3Cg fill='%23000000' fillOpacity='1'%3E%3Ccircle cx='30' cy='30' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          }}
+        ></div>
+      </div>
+
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Premium Header Section */}
+        <motion.div
+          initial={{ y: -30, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.6 }}
+          className="mb-12"
+        >
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-8 lg:p-12">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+              <div className="flex-1">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <span className="text-2xl font-bold text-white">
+                      {groupData.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <h1 className="text-4xl lg:text-5xl font-bold text-slate-800 mb-2">
+                      {groupData.name}
+                    </h1>
+                    <div className="flex flex-wrap items-center gap-4 text-slate-600">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span>Created {formatDate(groupData.createdAt)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span>Owner: {groupData.owner.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                        <span>{groupData.memberCount} members</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-2xl p-6 text-center min-w-[160px]">
+                  <p className="text-sm font-medium text-blue-600 mb-1">
+                    Total Amount
+                  </p>
+                  <p className="text-3xl font-bold text-blue-800">
+                    ₹{groupData.totalAmount}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowScanPayModal(true)}
+                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-4 rounded-2xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+                >
+                  Scan & Pay
+                </button>
+              </div>
             </div>
           </div>
-          <button
-            onClick={() => setShowPaymentModal(true)}
-            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium"
-          >
-            Add Payment
-          </button>
-        </div>
-      </div>
+        </motion.div>
 
-      {/* Group Info Card */}
-      <div className="bg-white mx-4 mt-4 rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex items-center space-x-4 mb-4">
-          <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-            <span className="text-white font-bold text-lg">
-              {groupData?.name?.charAt(0)?.toUpperCase()}
-            </span>
+        {/* Premium Tab Navigation */}
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.6 }}
+          className="mb-8"
+        >
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-2">
+            <div className="flex space-x-1">
+              {tabs.map((tab) => (
+                <motion.button
+                  key={tab.id}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-1 flex items-center justify-center gap-3 px-6 py-4 rounded-xl transition-all duration-300 font-semibold ${
+                    activeTab === tab.id
+                      ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                  }`}
+                >
+                  <span className="text-lg">{tab.icon}</span>
+                  <span>{tab.label}</span>
+                </motion.button>
+              ))}
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-semibold text-gray-900 truncate">
-              {groupData?.name}
-            </h2>
-            <p className="text-sm text-gray-500">
-              Created by {groupData?.owner?.name}
-            </p>
-          </div>
-        </div>
+        </motion.div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-blue-50 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-blue-600">
-              ₹{groupData?.totalAmount || 0}
-            </p>
-            <p className="text-xs text-blue-600 font-medium">Total Amount</p>
-          </div>
-          <div className="bg-green-50 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-green-600">
-              {groupData?.memberCount || 0}
-            </p>
-            <p className="text-xs text-green-600 font-medium">Members</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Navigation Tabs */}
-      <div className="bg-white mx-4 mt-4 rounded-xl shadow-sm border border-gray-200 p-1">
-        <div className="flex space-x-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium ${
-                activeTab === tab.id
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              <span className="text-base">{tab.icon}</span>
-              <span className="hidden sm:inline">{tab.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Content Area */}
-      <div className="px-4 pb-6">
-        <AnimatePresence mode="wait">
-          {activeTab === "overview" && (
-            <motion.div
-              key="overview"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className="mt-4 space-y-4"
-            >
-              {/* Group Details Card */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Group Details
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">Created</span>
-                    <span className="text-sm font-medium text-gray-900">
-                      {formatDate(groupData?.createdAt)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">Owner</span>
-                    <span className="text-sm font-medium text-gray-900">
-                      {groupData?.owner?.name}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">Email</span>
-                    <span className="text-sm font-medium text-gray-900 truncate ml-2">
-                      {groupData?.owner?.email}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-sm text-gray-600">Status</span>
-                    <span className="text-sm font-medium text-green-600">
-                      Active
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Quick Actions
-                </h3>
-                <div className="space-y-3">
-                  <button
-                    onClick={() => setShowPaymentModal(true)}
-                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2"
-                  >
-                    💳 Add Payment
-                  </button>
-                  {groupData?.owner?.userId !== userData?._id && (
-                    <button
-                      onClick={() => setLeaveGroupModal(true)}
-                      disabled={isLeavingGroup}
-                      className="w-full bg-gray-100 text-gray-700 py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {isLeavingGroup ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-gray-700 border-t-transparent rounded-full animate-spin"></div>
-                          Leaving...
-                        </>
-                      ) : (
-                        <>👋 Leave Group</>
-                      )}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {activeTab === "members" && (
-            <motion.div
-              key="members"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className="mt-4"
-            >
-              {/* Group Members Header */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Group Members
-                  </h3>
-                  <button
-                    onClick={() => setAddMemberModal(true)}
-                    disabled={isAddingMembers}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {isAddingMembers ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Adding...
-                      </>
-                    ) : (
-                      <>
-                        <span>+</span> Add Member
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Members List */}
-              <div className="space-y-3">
-                {groupData?.members?.map((member, index) => (
-                  <motion.div
-                    key={member.userId}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4"
-                  >
-                    {/* Member Header */}
-                    <div className="flex items-center space-x-3 mb-4">
-                      <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-white font-bold text-lg">
-                          {member.name.charAt(0).toUpperCase()}
-                        </span>
+        {/* Premium Content Area */}
+        <motion.div
+          initial={{ y: 30, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.5, duration: 0.6 }}
+          className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 min-h-[600px]"
+        >
+          <div className="p-8 lg:p-12">
+            <AnimatePresence mode="wait">
+              {activeTab === "overview" && (
+                <motion.div
+                  key="overview"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.4 }}
+                  className="space-y-8"
+                >
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Group Information Card */}
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-2xl p-8 border border-blue-200/50">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center">
+                          <span className="text-white font-bold">ℹ️</span>
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-800">
+                          Group Details
+                        </h3>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-gray-900 truncate">
-                          {member.name}
-                        </h4>
-                        <p className="text-sm text-gray-500 truncate">
-                          {member.email}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => deleteMember(member.userId, member.name)}
-                        disabled={isDeletingMember}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                      >
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-
-                    {/* Amount Section */}
-                    <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Amount:</span>
-                        <span className="text-lg font-bold text-gray-900">
-                          ₹{member.amount || 0}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex space-x-2">
-                      <button className="flex-1 bg-blue-600 text-white py-2.5 px-4 rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors">
-                        Pay Now
-                      </button>
-                      <button className="flex-1 bg-gray-100 text-gray-700 py-2.5 px-4 rounded-lg font-medium text-sm hover:bg-gray-200 transition-colors">
-                        Remind
-                      </button>
-                    </div>
-
-                    {/* UPI Link if available */}
-                    {member.upiLink && (
-                      <div className="mt-3 pt-3 border-t border-gray-100">
-                        <p className="text-xs text-gray-500 mb-1">UPI ID:</p>
-                        <p className="text-xs font-mono text-blue-600 break-all bg-blue-50 p-2 rounded">
-                          {member.upiLink}
-                        </p>
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {activeTab === "payments" && (
-            <motion.div
-              key="payments"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className="mt-4"
-            >
-              {!paymentData ? (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <div className="text-center mb-6">
-                    <div className="text-4xl mb-3">💳</div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">
-                      Process Group Payment
-                    </h3>
-                    <p className="text-gray-600 text-sm">
-                      Enter payment details to split among members
-                    </p>
-                  </div>
-                  <form onSubmit={handlePaymentSubmit} className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Shop UPI ID
-                      </label>
-                      <input
-                        type="text"
-                        value={paymentForm.shopUpiId}
-                        onChange={(e) =>
-                          setPaymentForm((prev) => ({
-                            ...prev,
-                            shopUpiId: e.target.value,
-                          }))
-                        }
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter merchant UPI ID"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Total Amount (₹)
-                      </label>
-                      <input
-                        type="number"
-                        value={paymentForm.totalAmount}
-                        onChange={(e) =>
-                          setPaymentForm((prev) => ({
-                            ...prev,
-                            totalAmount: e.target.value,
-                          }))
-                        }
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter total amount"
-                        required
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={isProcessingPayment}
-                      className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isProcessingPayment ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Processing...
-                        </span>
-                      ) : (
-                        "Process Payment"
-                      )}
-                    </button>
-                  </form>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                      Payment Details
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-600">
-                          Total Amount:
-                        </span>
-                        <span className="font-bold text-gray-900">
-                          ₹{paymentData.totalAmount}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-600">Shop UPI:</span>
-                        <span className="font-mono text-gray-900 text-sm truncate ml-2">
-                          {paymentData.shopUpiId}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() =>
-                          handleUpiPayment(paymentData.groupUpiLink)
-                        }
-                        className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium shadow-sm transition-colors"
-                      >
-                        Pay Full Amount (₹{paymentData.totalAmount})
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <h3 className="text-lg font-semibold text-gray-900 px-1">
-                      Individual Payments
-                    </h3>
-                    {paymentData.members.map((member) => (
-                      <div
-                        key={member._id}
-                        className="bg-white rounded-xl shadow-sm border border-gray-200 p-4"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <h4 className="font-semibold text-gray-900">
-                              {member.name}
-                            </h4>
-                            <p className="text-sm text-gray-500">
-                              Individual Share
-                            </p>
-                          </div>
-                          <span className="font-bold text-lg text-gray-900">
-                            ₹{member.amount}
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center py-3 border-b border-blue-200/50">
+                          <span className="font-medium text-slate-600">
+                            Group Name
+                          </span>
+                          <span className="font-semibold text-slate-800">
+                            {groupData.name}
                           </span>
                         </div>
-                        <button
-                          onClick={() => handleUpiPayment(member.upiLink)}
-                          className="w-full px-4 py-2.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors font-medium"
-                        >
-                          Pay Share
-                        </button>
+                        <div className="flex justify-between items-center py-3 border-b border-blue-200/50">
+                          <span className="font-medium text-slate-600">
+                            Total Amount
+                          </span>
+                          <span className="font-semibold text-slate-800">
+                            ₹{groupData.totalAmount}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-3 border-b border-blue-200/50">
+                          <span className="font-medium text-slate-600">
+                            Created By
+                          </span>
+                          <span className="font-semibold text-slate-800">
+                            {groupData.owner.name}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-3">
+                          <span className="font-medium text-slate-600">
+                            Owner Email
+                          </span>
+                          <span className="font-semibold text-slate-800">
+                            {groupData.owner.email}
+                          </span>
+                        </div>
                       </div>
+                    </div>
+
+                    {/* Quick Stats Card */}
+                    <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-2xl p-8 border border-slate-200/50">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 bg-slate-600 rounded-xl flex items-center justify-center">
+                          <span className="text-white font-bold">📈</span>
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-800">
+                          Quick Stats
+                        </h3>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-4 bg-white rounded-xl shadow-sm">
+                          <p className="text-2xl font-bold text-blue-600">
+                            {groupData.memberCount}
+                          </p>
+                          <p className="text-sm font-medium text-slate-600">
+                            Total Members
+                          </p>
+                        </div>
+                        <div className="text-center p-4 bg-white rounded-xl shadow-sm">
+                          <p className="text-2xl font-bold text-green-600">
+                            ₹{groupData.totalAmount}
+                          </p>
+                          <p className="text-sm font-medium text-slate-600">
+                            Group Total
+                          </p>
+                        </div>
+                        <div className="text-center p-4 bg-white rounded-xl shadow-sm">
+                          <p className="text-2xl font-bold text-purple-600">
+                            ₹
+                            {groupData.totalAmount > 0
+                              ? (
+                                  groupData.totalAmount / groupData.memberCount
+                                ).toFixed(2)
+                              : "0"}
+                          </p>
+                          <p className="text-sm font-medium text-slate-600">
+                            Per Member
+                          </p>
+                        </div>
+                        <div className="text-center p-4 bg-white rounded-xl shadow-sm">
+                          <p className="text-2xl font-bold text-orange-600">
+                            Active
+                          </p>
+                          <p className="text-sm font-medium text-slate-600">
+                            Status
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === "members" && (
+                <motion.div
+                  key="members"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.4 }}
+                  className="space-y-6"
+                >
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-2xl font-bold text-slate-800">
+                      Group Members
+                    </h3>
+                    <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded-full font-semibold">
+                      {groupData.memberCount} Members
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {groupData.members.map((member, index) => (
+                      <motion.div
+                        key={member.userId}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className="bg-white rounded-2xl p-6 shadow-lg border border-slate-200/50 hover:shadow-xl transition-all duration-300 hover:scale-105"
+                      >
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg">
+                            {member.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-bold text-slate-800 text-lg">
+                              {member.name}
+                            </h4>
+                            <p className="text-sm text-slate-600">
+                              {member.email}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
+                            <span className="text-slate-600 font-medium">
+                              Amount:
+                            </span>
+                            <span className="font-bold text-slate-800 text-lg">
+                              ₹{member.amount || 0}
+                            </span>
+                          </div>
+
+                          {member.upiLink && (
+                            <div className="p-3 bg-blue-50 rounded-xl">
+                              <span className="text-blue-600 font-medium text-sm">
+                                UPI:
+                              </span>
+                              <p className="text-blue-800 font-mono text-sm mt-1 break-all">
+                                {member.upiLink}
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="flex gap-2 pt-2">
+                            <button className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded-xl font-medium text-sm transition-colors">
+                              Pay Now
+                            </button>
+                            <button className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 px-3 rounded-xl font-medium text-sm transition-colors">
+                              Remind
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
                     ))}
                   </div>
-                </div>
+                </motion.div>
               )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+
+              {activeTab === "payments" && (
+                <motion.div
+                  key="payments"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.4 }}
+                  className="text-center py-16"
+                >
+                  <div className="max-w-md mx-auto">
+                    <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-blue-200 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                      <span className="text-4xl">💳</span>
+                    </div>
+                    <h3 className="text-2xl font-bold mb-4 text-slate-800">
+                      Payment Tracking
+                    </h3>
+                    <p className="text-slate-600 mb-8">
+                      Advanced payment tracking and management features are
+                      coming soon to help you monitor all group transactions.
+                    </p>
+                    <div className="bg-blue-50 rounded-2xl p-6 border border-blue-200">
+                      <p className="text-blue-800 font-medium">
+                        🚀 Feature in development
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.div>
       </div>
 
-      {/* Payment Form Modal */}
+      {/* Premium Toast Notification */}
       <AnimatePresence>
-        {showPaymentModal && (
+        {showToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.9 }}
+            className="fixed bottom-6 right-6 bg-white shadow-2xl border border-green-200 px-6 py-4 rounded-2xl flex items-center space-x-3 z-50"
+          >
+            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-sm">✓</span>
+            </div>
+            <span className="font-medium text-slate-800">
+              UPI Link copied successfully!
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Premium Scan & Pay Modal */}
+      <AnimatePresence>
+        {showScanPayModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShowPaymentModal(false)}
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4"
-              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md border border-white/20"
             >
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-gray-900">Add Payment</h3>
-                <button
-                  onClick={() => setShowPaymentModal(false)}
-                  className="text-gray-400 hover:text-gray-600 p-1"
-                >
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+              <div className="p-8">
+                <div className="flex justify-between items-center mb-8">
+                  <div>
+                    <h3 className="text-2xl font-bold text-slate-800">
+                      Scan & Pay
+                    </h3>
+                    <p className="text-slate-600 mt-1">Enter payment details</p>
+                  </div>
+                  <button
+                    onClick={() => setShowScanPayModal(false)}
+                    className="w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
+                    <span className="text-slate-600">✕</span>
+                  </button>
+                </div>
+
+                <form onSubmit={handleScanPaySubmit} className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-3">
+                      Shop UPI ID
+                    </label>
+                    <input
+                      type="text"
+                      value={paymentDetails.shopUpiId}
+                      onChange={(e) =>
+                        setPaymentDetails((prev) => ({
+                          ...prev,
+                          shopUpiId: e.target.value,
+                        }))
+                      }
+                      required
+                      placeholder="Enter shop UPI ID"
+                      className="w-full px-4 py-4 rounded-2xl border border-slate-200 bg-slate-50 text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white transition-all"
                     />
-                  </svg>
-                </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-3">
+                      Total Amount (₹)
+                    </label>
+                    <input
+                      type="number"
+                      value={paymentDetails.totalAmount}
+                      onChange={(e) =>
+                        setPaymentDetails((prev) => ({
+                          ...prev,
+                          totalAmount: e.target.value,
+                        }))
+                      }
+                      required
+                      min="1"
+                      placeholder="Enter amount"
+                      className="w-full px-4 py-4 rounded-2xl border border-slate-200 bg-slate-50 text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white transition-all"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className={`w-full py-4 px-6 rounded-2xl font-semibold text-white transition-all duration-200 ${
+                      isSubmitting
+                        ? "bg-slate-400 cursor-not-allowed"
+                        : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transform hover:scale-105"
+                    }`}
+                  >
+                    {isSubmitting ? (
+                      <div className="flex items-center justify-center space-x-2">
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span>Processing...</span>
+                      </div>
+                    ) : (
+                      "Proceed to Pay"
+                    )}
+                  </button>
+                </form>
               </div>
-              <form onSubmit={handlePaymentSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Shop UPI ID
-                  </label>
-                  <input
-                    type="text"
-                    value={paymentForm.shopUpiId}
-                    onChange={(e) =>
-                      setPaymentForm((prev) => ({
-                        ...prev,
-                        shopUpiId: e.target.value,
-                      }))
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter merchant UPI ID"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Total Amount (₹)
-                  </label>
-                  <input
-                    type="number"
-                    value={paymentForm.totalAmount}
-                    onChange={(e) =>
-                      setPaymentForm((prev) => ({
-                        ...prev,
-                        totalAmount: e.target.value,
-                      }))
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter total amount"
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={isProcessingPayment}
-                  className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isProcessingPayment ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Processing...
-                    </span>
-                  ) : (
-                    "Process Payment"
-                  )}
-                </button>
-              </form>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Delete Member Modal */}
-      <DeleteMemberModal
-        isOpen={deleteMemberModal.isOpen}
-        onClose={() =>
-          setDeleteMemberModal((prev) => ({ ...prev, isOpen: false }))
-        }
-        onConfirm={confirmDeleteMember}
-        memberName={deleteMemberModal.memberName}
-      />
-
-      {/* Add Member Modal */}
-      <AddMemberModal
-        isOpen={addMemberModal}
-        onClose={() => setAddMemberModal(false)}
-        onConfirm={handleAddMembers}
-      />
-
-      {/* Leave Group Modal */}
-      <LeaveGroupModal
-        isOpen={leaveGroupModal}
-        onClose={() => setLeaveGroupModal(false)}
-        onConfirm={handleLeaveGroup}
-        groupName={groupData?.name}
-      />
     </div>
   );
 };
 
-const DeleteMemberModal = ({ isOpen, onClose, onConfirm, memberName }) => {
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-red-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
-                Remove Member
-              </h3>
-              <p className="text-gray-600 text-sm">
-                Are you sure you want to remove{" "}
-                <span className="font-semibold">{memberName}</span> from the
-                group?
-              </p>
-            </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={onClose}
-                className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={onConfirm}
-                className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
-              >
-                Remove
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-};
-
-const AddMemberModal = ({ isOpen, onClose, onConfirm }) => {
-  const [memberIds, setMemberIds] = useState("");
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const ids = memberIds
-      .split(",")
-      .map((id) => id.trim())
-      .filter((id) => id);
-    onConfirm(ids);
-    setMemberIds("");
-  };
-
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-blue-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
-                Add Members
-              </h3>
-              <p className="text-gray-600 text-sm mb-4">
-                Enter member IDs separated by commas
-              </p>
-            </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <textarea
-                value={memberIds}
-                onChange={(e) => setMemberIds(e.target.value)}
-                placeholder="e.g. 684ef067b2d541f888468d14, 684ef..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none h-20"
-                rows={3}
-              />
-              <div className="flex space-x-3">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                >
-                  Add Members
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-};
-
-const LeaveGroupModal = ({ isOpen, onClose, onConfirm, groupName }) => {
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-orange-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
-                Leave Group
-              </h3>
-              <p className="text-gray-600 text-sm">
-                Are you sure you want to leave{" "}
-                <span className="font-semibold">{groupName}</span>? You'll need
-                to be added back by the group owner.
-              </p>
-            </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={onClose}
-                className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={onConfirm}
-                className="flex-1 px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors"
-              >
-                Leave Group
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-};
-
 export default ViewGroup;
+

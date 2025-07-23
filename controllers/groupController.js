@@ -7,18 +7,24 @@ import {
 } from "../errors/customErrors.js";
 
 export const createGroup = async (req, res) => {
-  const { groupName, memberIds } = req.body;
+  const { groupName, memberUsernames } = req.body;
 
-  if (!groupName || !Array.isArray(memberIds) || memberIds.length === 0) {
-    throw new BadRequestError("groupName and memberIds (array) are required");
+  if (
+    !groupName ||
+    !Array.isArray(memberUsernames) ||
+    memberUsernames.length === 0
+  ) {
+    throw new BadRequestError(
+      "groupName and memberUsernames (array) are required"
+    );
   }
 
   try {
-    // Verify all members exist in the database
-    const members = await User.find({ _id: { $in: memberIds } });
+    // Verify all members exist in the database by username
+    const members = await User.find({ name: { $in: memberUsernames } });
 
-    if (members.length !== memberIds.length) {
-      throw new BadRequestError("One or more users not found");
+    if (members.length !== memberUsernames.length) {
+      throw new BadRequestError("One or more usernames not found");
     }
 
     // Create member objects with user references
@@ -92,7 +98,7 @@ export const getGroupDetails = async (req, res) => {
 
 export const updateGroupDetails = async (req, res) => {
   const { groupId } = req.params;
-  const { name, amount, memberIds } = req.body;
+  const { name, amount, memberUsernames } = req.body;
 
   try {
     const group = await Group.findById(groupId);
@@ -103,7 +109,7 @@ export const updateGroupDetails = async (req, res) => {
 
     // Verify user has permission (owner or admin)
     if (
-      group.owner.toString() !== req.user.userId.toString() && // Changed from req.user._id
+      group.owner.toString() !== req.user.userId.toString() &&
       req.user.role !== "admin"
     ) {
       throw new UnauthorizedError("Not authorized to update this group");
@@ -112,11 +118,11 @@ export const updateGroupDetails = async (req, res) => {
     if (name) group.name = name;
     if (amount !== undefined) group.totalAmount = amount;
 
-    if (memberIds) {
+    if (memberUsernames) {
       // Verify all new members exist
-      const members = await User.find({ _id: { $in: memberIds } });
+      const members = await User.find({ name: { $in: memberUsernames } });
 
-      if (members.length !== memberIds.length) {
+      if (members.length !== memberUsernames.length) {
         throw new BadRequestError("One or more users not found");
       }
 
@@ -140,11 +146,15 @@ export const updateGroupDetails = async (req, res) => {
 };
 
 export const addMembers = async (req, res) => {
-  const { memberIds } = req.body;
+  const { memberUsernames } = req.body;
   const { groupId } = req.params;
 
-  if (!groupId || !Array.isArray(memberIds) || memberIds.length === 0) {
-    throw new BadRequestError("groupId and memberIds array are required");
+  if (
+    !groupId ||
+    !Array.isArray(memberUsernames) ||
+    memberUsernames.length === 0
+  ) {
+    throw new BadRequestError("groupId and memberUsernames array are required");
   }
 
   try {
@@ -156,17 +166,17 @@ export const addMembers = async (req, res) => {
 
     // Verify user has permission
     if (
-      group.owner.toString() !== req.user.userId.toString() && // Changed from req.user._id
+      group.owner.toString() !== req.user.userId.toString() &&
       req.user.role !== "admin"
     ) {
       throw new UnauthorizedError("Not authorized to update this group");
     }
 
-    // Verify all new members exist
-    const newMembers = await User.find({ _id: { $in: memberIds } });
+    // Find users by their usernames
+    const newMembers = await User.find({ name: { $in: memberUsernames } });
 
-    if (newMembers.length !== memberIds.length) {
-      throw new BadRequestError("One or more users not found");
+    if (newMembers.length !== memberUsernames.length) {
+      throw new BadRequestError("One or more usernames not found");
     }
 
     // Check for duplicates
@@ -303,5 +313,71 @@ export const leaveGroup = async (req, res) => {
   } catch (err) {
     console.error("Error leaving group:", err);
     throw err;
+  }
+};
+
+export const updateGroup = async (req, res) => {
+  const { groupId } = req.params;
+  const { name, amount, memberUsernames } = req.body;
+
+  if (!name && amount === undefined && !memberUsernames) {
+    throw new BadRequestError("Please provide at least one field to update");
+  }
+
+  try {
+    const group = await Group.findById(groupId);
+
+    if (!group) {
+      throw new NotFoundError("Group not found");
+    }
+
+    // Verify user has permission
+    if (
+      group.owner.toString() !== req.user.userId.toString() &&
+      req.user.role !== "admin"
+    ) {
+      throw new UnauthorizedError("Not authorized to update this group");
+    }
+
+    // Update name if provided
+    if (name) {
+      group.name = name;
+    }
+
+    // Update amount if provided
+    if (amount !== undefined) {
+      group.amount = amount;
+    }
+
+    // Update members if provided
+    if (memberUsernames && Array.isArray(memberUsernames)) {
+      // Find users by their usernames
+      const members = await User.find({ name: { $in: memberUsernames } });
+
+      if (members.length !== memberUsernames.length) {
+        throw new BadRequestError("One or more usernames not found");
+      }
+
+      // Create member objects with user references
+      const memberObjects = members.map((user) => ({
+        user: user._id,
+      }));
+
+      group.members = memberObjects;
+    }
+
+    await group.save();
+
+    // Populate user details in response
+    await group.populate("members.user", "name email");
+    await group.populate("owner", "name email");
+
+    res.json({
+      message: "Group updated successfully",
+      group,
+    });
+  } catch (error) {
+    console.error("Update group error:", error);
+    throw error;
   }
 };

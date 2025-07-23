@@ -15,6 +15,12 @@ const Profile = () => {
     phone: "+91 9876543210",
     upiId: "john@paytm",
   });
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordError, setPasswordError] = useState("");
 
   const words = [
     { text: "Your" },
@@ -34,11 +40,54 @@ const Profile = () => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handlePasswordChange = (field, value) => {
+    setPasswordData((prev) => ({ ...prev, [field]: value }));
+    setPasswordError(""); // Clear any previous errors
+  };
+
   const handleSave = () => {
     // Simulate API call
     console.log("Saving profile:", formData);
     setIsEditing(false);
     alert("Profile updated successfully!");
+  };
+
+  const handleUpdatePassword = async () => {
+    // Validate passwords
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordError("New passwords do not match");
+      return;
+    }
+
+    if (
+      !passwordData.currentPassword ||
+      !passwordData.newPassword ||
+      !passwordData.confirmPassword
+    ) {
+      setPasswordError("All password fields are required");
+      return;
+    }
+
+    try {
+      const response = await customFetch.post("/auth/update-password", {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      });
+
+      toast.success("Password updated successfully");
+      setShowChangePassword(false);
+      // Clear password fields
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.msg || "Failed to update password";
+      setPasswordError(errorMessage);
+      toast.error(errorMessage);
+    }
   };
 
   const handleLogout = () => {
@@ -224,7 +273,7 @@ const Profile = () => {
                   </div>
                   <button
                     onClick={() => setShowChangePassword(!showChangePassword)}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    className="px-4 py-2   bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
                   >
                     🔑 Change Password
                   </button>
@@ -240,6 +289,13 @@ const Profile = () => {
                         type="password"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
                         placeholder="Enter current password"
+                        value={passwordData.currentPassword}
+                        onChange={(e) =>
+                          handlePasswordChange(
+                            "currentPassword",
+                            e.target.value
+                          )
+                        }
                       />
                     </div>
                     <div>
@@ -250,6 +306,10 @@ const Profile = () => {
                         type="password"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
                         placeholder="Enter new password"
+                        value={passwordData.newPassword}
+                        onChange={(e) =>
+                          handlePasswordChange("newPassword", e.target.value)
+                        }
                       />
                     </div>
                     <div>
@@ -260,14 +320,35 @@ const Profile = () => {
                         type="password"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
                         placeholder="Confirm new password"
+                        value={passwordData.confirmPassword}
+                        onChange={(e) =>
+                          handlePasswordChange(
+                            "confirmPassword",
+                            e.target.value
+                          )
+                        }
                       />
                     </div>
+                    {passwordError && (
+                      <p className="text-red-500 text-sm">{passwordError}</p>
+                    )}
                     <div className="flex gap-3">
-                      <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                      <button
+                        onClick={handleUpdatePassword}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                      >
                         Update Password
                       </button>
                       <button
-                        onClick={() => setShowChangePassword(false)}
+                        onClick={() => {
+                          setShowChangePassword(false);
+                          setPasswordData({
+                            currentPassword: "",
+                            newPassword: "",
+                            confirmPassword: "",
+                          });
+                          setPasswordError("");
+                        }}
                         className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                       >
                         Cancel

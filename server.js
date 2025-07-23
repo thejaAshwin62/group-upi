@@ -9,6 +9,7 @@ import connectDB from "./config/mongoose/database.js";
 import paymentsRoutes from "./routes/paymentRoutes.js";
 import groupsRoutes from "./routes/groupRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import errorHandlerMiddleware from "./middleware/error-handler.js";
 
 dotenv.config();
 
@@ -31,6 +32,7 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/payments", paymentsRoutes);
 app.use("/api/v1/groups", groupsRoutes);
 
+app.use(errorHandlerMiddleware);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -40,9 +42,9 @@ app.use(express.static(path.resolve(__dirname, "./public")));
 app.get("/", (req, res) => {
   res.sendFile(path.resolve(__dirname, "./public", "index.html"));
 });
-app.get("/test",(req,res)=>{
-res.json("hello world ");
-})
+app.get("/test", (req, res) => {
+  res.json("hello world ");
+});
 
 // Start Server and Connect to DB
 app.listen(PORT, async () => {

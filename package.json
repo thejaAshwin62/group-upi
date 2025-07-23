@@ -26,6 +26,7 @@
     "mernfinity": "^2.0.6",
     "mongoose": "^7.8.7",
     "morgan": "^1.10.0",
+    "nodemailer": "^7.0.5",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {

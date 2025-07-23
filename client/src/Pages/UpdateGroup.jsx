@@ -10,9 +10,10 @@ const UpdateGroup = () => {
   const { groupId } = useParams();
   const [groupName, setGroupName] = useState("");
   const [amount, setAmount] = useState("");
-  const [userIdInput, setUserIdInput] = useState("");
+  const [usernameInput, setUsernameInput] = useState("");
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -21,56 +22,83 @@ const UpdateGroup = () => {
       try {
         const response = await customFetch.get(`/groups/${groupId}`);
         const group = response.data.group;
-        setGroupName(group.name);
-        setAmount(group.amount);
-        setSelectedMembers(
-          group.members.map((member) => ({
-            id: member.userId,
-          }))
-        );
+
+        // Set group name and amount with fallbacks
+        setGroupName(group?.name || "");
+        setAmount(group?.totalAmount?.toString() || "");
+
+        // Transform member data with null checks
+        const transformedMembers =
+          group?.members
+            ?.map((member) => ({
+              username: member?.user?.name || "",
+              id: member?.user?._id || "",
+            }))
+            .filter((member) => member.username && member.id) || [];
+
+        setSelectedMembers(transformedMembers);
       } catch (error) {
         console.error("Error fetching group details:", error);
         toast.error("Failed to fetch group details");
+        // Navigate back on error
+        navigate(-1);
       }
     };
+
     fetchGroupDetails();
-  }, [groupId]);
+  }, [groupId, navigate]);
 
   const validateForm = () => {
     const newErrors = {};
     if (!groupName.trim()) {
       newErrors.groupName = "Group name is required";
     }
-    // Only validate amount if it's being changed (not empty)
     if (amount !== "" && amount < 0) {
       newErrors.amount = "Amount cannot be negative";
-    }
-    // Only validate members if new ones are being added
-    if (userIdInput.trim()) {
-      if (selectedMembers.length < 2) {
-        newErrors.members = "At least 2 members are required";
-      }
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const addMember = (userId) => {
-    if (!userId.trim()) return;
-    if (selectedMembers.some((member) => member.id === userId)) {
+  const addMember = async (username) => {
+    if (!username.trim()) return;
+
+    // Check if member already exists in selection
+    if (selectedMembers.some((member) => member.username === username)) {
       toast.error("Member already added");
       return;
     }
-    setSelectedMembers([...selectedMembers, { id: userId }]);
-    setUserIdInput("");
-    if (errors.members) {
-      setErrors({ ...errors, members: "" });
+
+    setIsValidating(true);
+    try {
+      const response = await customFetch.post("/auth/validate-username", {
+        username: username.trim(),
+      });
+
+      if (response.data.valid) {
+        setSelectedMembers([...selectedMembers, { username: username.trim() }]);
+        setUsernameInput("");
+        toast.success("Member added successfully!");
+        if (errors.members) {
+          setErrors({ ...errors, members: "" });
+        }
+      }
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.msg ||
+        (error.response?.status === 404
+          ? "Username not found"
+          : "Failed to validate username");
+      toast.error(errorMessage);
+    } finally {
+      setIsValidating(false);
+      setUsernameInput("");
     }
   };
 
-  const removeMember = (userId) => {
+  const removeMember = (username) => {
     setSelectedMembers(
-      selectedMembers.filter((member) => member.id !== userId)
+      selectedMembers.filter((member) => member.username !== username)
     );
   };
 
@@ -81,18 +109,18 @@ const UpdateGroup = () => {
     }
     setIsLoading(true);
     try {
-      // Only include fields that have been modified
       const payload = {
         name: groupName.trim(),
       };
-      // Only include amount if it's been modified
       if (amount !== "") {
         payload.amount = Number(amount);
       }
-      // Only include members if they've been modified
-      if (userIdInput.trim() || selectedMembers.length > 0) {
-        payload.memberIds = selectedMembers.map((member) => member.id);
+      if (selectedMembers.length > 0) {
+        payload.memberUsernames = selectedMembers.map(
+          (member) => member.username
+        );
       }
+
       await customFetch.patch(`/groups/${groupId}`, payload);
       setShowSuccess(true);
       toast.success("Group updated successfully!");
@@ -268,12 +296,11 @@ const UpdateGroup = () => {
               )}
             </div>
 
-            {/* Members Selection (Optional) */}
+            {/* Members Selection */}
             <div>
               <div className="flex justify-between items-center mb-3">
                 <label className="block text-sm font-medium text-gray-700">
-                  Group Members{" "}
-                  <span className="text-blue-500">(optional)</span>
+                  Group Members
                 </label>
                 <span className="text-sm text-blue-600">
                   {selectedMembers.length} members selected
@@ -289,13 +316,15 @@ const UpdateGroup = () => {
                   <div className="flex flex-wrap gap-2">
                     {selectedMembers.map((member) => (
                       <div
-                        key={member.id}
+                        key={member.username}
                         className="flex items-center bg-blue-100 text-blue-800 px-3 py-1.5 rounded-full text-sm font-medium border border-blue-200"
                       >
-                        <span className="truncate max-w-24">{member.id}</span>
+                        <span className="truncate max-w-24">
+                          {member.username}
+                        </span>
                         <button
                           type="button"
-                          onClick={() => removeMember(member.id)}
+                          onClick={() => removeMember(member.username)}
                           className="ml-2 text-blue-600 hover:text-blue-800 font-bold"
                         >
                           ×
@@ -306,25 +335,31 @@ const UpdateGroup = () => {
                 </div>
               )}
 
-              {/* User ID Input */}
+              {/* Username Input */}
               <div className="relative">
                 <input
                   type="text"
-                  value={userIdInput}
-                  onChange={(e) => setUserIdInput(e.target.value)}
+                  value={usernameInput}
+                  onChange={(e) => setUsernameInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      addMember(userIdInput);
+                      addMember(usernameInput);
                     }
                   }}
-                  placeholder="Enter user ID to add..."
+                  placeholder="Enter username and press Enter..."
                   className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all placeholder-gray-400 text-gray-900 ${
                     errors.members
                       ? "border-red-300 focus:ring-red-500 focus:border-red-500"
                       : "border-gray-300"
                   }`}
+                  disabled={isValidating}
                 />
+                {isValidating && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                )}
               </div>
               {errors.members && (
                 <p className="text-red-500 text-sm mt-2 flex items-center">
