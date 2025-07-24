@@ -148,7 +148,8 @@ export const login = async (req, res) => {
     res.cookie("token", token, {
       httpOnly: true,
       expires: new Date(Date.now() + thirtyDays),
-      secure: process.env.NODE_ENV === "production",
+      secure: process.env.NODE_ENV === "production", // true on live server (HTTPS)
+      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax", // Required for cross-origin cookies
     });
 
     res.status(StatusCodes.OK).json({
